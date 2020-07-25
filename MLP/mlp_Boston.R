@@ -1,80 +1,163 @@
-------------------------------------------------------------------------
+#------------------------------------------------------------------------
 ## 1. PACKAGES INSTALLATION AND ACTIVATION 
   
-#install.packages(keras)
+#install.packages(kerasR)
 #install.packages(tensorflow)
-#install.packages(MASS)
-#install.packages("neuralnet")
-library(keras)
+#install.packages(httr)
+#install.packages(RCurl)
+#install.packages(readxl)
+#install.packages(remotes)
+#install.packages(tidyverse)
+#remotes::install_github("rstudio/tensorflow")
 library(tensorflow)
-library(MASS)
-library(neuralnet)
-
-------------------------------------------------------------------------
+#install_tensorflow(version = "2.0.0")
+library(keras)
+library(kerasR)
+library(httr)
+library(RCurl)
+library(readxl)
+library(tidyverse)
+#------------------------------------------------------------------------
 ## 2. DATA PREPROCESSING
 # Remove missing values
+library(MASS)
 attach(Boston)
-Boston <- na.omit(Boston)
+dataset <- na.omit(Boston)
 with(Boston, sum(is.na(crim)))
-
-------------------------------------------------------------------------
+#------------------------------------------------------------------------
 ## 3. DATA SPLIT: TRAIN DATASET AND TEST DATASET 
 # Random sampling, create training (80%) and test set (20%)
 set.seed(80)
-samplesize = 0.80 * nrow(Boston)
-index = sample( seq_len ( nrow ( Boston ) ), size = samplesize )
-trainNN = Boston[index , ]
-testNN = Boston[-index , ]
+samplesize = 0.80 * nrow(dataset)
+index = sample( seq_len ( nrow ( dataset ) ), size = samplesize )
+X_train = as.matrix(dataset[index , 2:14])
+Y_train = as.matrix(dataset[index , 1])
+X_test = as.matrix(dataset[-index , 2:14])
+Y_test = as.matrix(dataset[-index , 1])
 
-------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------
 ## 4. DATA SCALING
-# Data scaling by min-max normalization 
-max = apply(Boston , 2 , max)
-min = apply(Boston, 2 , min)
-scaled = as.data.frame(scale(Boston, center = min, scale = max - min))
-train_scaled_NN = scaled[index , ]
-test_scaled_NN = scaled[-index , ]
+# Normalize training data
+scaled_X_train = scale(X_train)
 
-------------------------------------------------------------------------
+# Use means and standard deviations from training set to normalize test set
+col_means_train <- attr(scaled_X_train, "scaled:center") 
+col_stddevs_train <- attr(scaled_X_train, "scaled:scale")
+scaled_X_test <- scale(X_test, center = col_means_train, scale = col_stddevs_train)
+
+#------------------------------------------------------------------------
 ## 5. TRAIN NN MODEL
-set.seed(2)
-NN = neuralnet(crim ~ zn + indus + chas + nox + rm + age  + dis + rad + tax + 
-                 ptratio + black + lstat + medv, train_scaled_NN, hidden = 5 ,
-               linear.output = TRUE)
-NN$result.matrix
-plot(NN)
+# Construct the NN
+   
+mlp <- keras_model_sequential() %>%
+  layer_dense(units = 8, activation = "relu", input_shape = dim(X_train)[2]) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 4, activation = "relu") %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 1, activation = "linear")
 
-------------------------------------------------------------------------
+mlp_l2 <- keras_model_sequential() %>%
+  layer_dense(units = 8, activation = "relu", input_shape = dim(X_train)[2], 
+              kernel_regularizer = regularizer_l2(l = 0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 4, activation = "relu", 
+              kernel_regularizer = regularizer_l2(l = 0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 1, activation = "linear")
+
+mlp_l1 <- keras_model_sequential() %>%
+  layer_dense(units = 8, activation = "relu", input_shape = dim(X_train)[2], 
+              kernel_regularizer = regularizer_l1(l = 0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 4, activation = "relu", 
+              kernel_regularizer = regularizer_l1(l = 0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 1, activation = "linear")
+
+mlp_l1_l2 <- keras_model_sequential() %>%
+  layer_dense(units = 8, activation = "relu", input_shape = dim(X_train)[2], 
+              kernel_regularizer = regularizer_l1_l2(l1 = 0.001, l2 = 0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 4, activation = "relu", 
+              kernel_regularizer = regularizer_l1_l2(l1 = 0.001, l2 = 0.001)) %>%
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 1, activation = "linear")
+opt<-optimizer_adam( lr= 0.001 , decay = 0, clipnorm = 1 )
+mlp %>% compile(
+  loss = "mse", optimizer = opt, metrics = list("mean_absolute_error"))
+mlp_l2 %>% compile(
+  loss = "mse", optimizer = opt, metrics = list("mean_absolute_error"))
+mlp_l1 %>% compile(
+  loss = "mse", optimizer = opt, metrics = list("mean_absolute_error"))
+mlp_l1_l2 %>% compile(
+  loss = "mse", optimizer = opt,metrics = list("mean_absolute_error"))
+
+mlp %>% summary()
+mlp_l2 %>% summary()
+mlp_l1 %>% summary()
+mlp_l1_l2 %>% summary()
+
+#Train the NN
+early_stop <- callback_early_stopping(monitor = "val_loss", patience = 200)
+set.seed(80)
+visualisation <- mlp %>% fit(
+  X_train,
+  Y_train,
+  epochs = 500,
+  validation_split = 0.2,
+  verbose = 0, callbacks = list(early_stop)
+)
+
+set.seed(80)
+visualisation_l2 <- mlp_l2 %>% fit(
+  X_train,
+  Y_train,
+  epochs = 500,
+  validation_split = 0.2,
+  verbose = 0, callbacks = list(early_stop)
+)
+set.seed(80)
+visualisation_l1 <- mlp_l1 %>% fit(
+  X_train,
+  Y_train,
+  epochs = 500,
+  validation_split = 0.2,
+  verbose = 0, callbacks = list(early_stop)
+)
+set.seed(80)
+visualisation_l1_l2 <- mlp_l1_l2 %>% fit(
+  X_train,
+  Y_train,
+  epochs = 500,
+  validation_split = 0.2,
+  verbose = 0, callbacks = list(early_stop)
+)
+
+# Visualisation
+library(ggplot2)
+plot(visualisation)
+plot(visualisation_l2)
+plot(visualisation_l1)
+plot(visualisation_l1_l2)
+#c(loss, MAE) %<-% (model %>% evaluate(X_test, Y_test, verbose = 0))
+#paste0("Mean squared error on test set: ", sprintf("%.2f", loss), "%")
+mlp %>% evaluate(X_test, Y_test)
+mlp_l2 %>% evaluate(X_test, Y_test)
+mlp_l1 %>% evaluate(X_test, Y_test)
+mlp_l1_l2 %>% evaluate(X_test, Y_test)
+
+#------------------------------------------------------------------------
 ## 6. TEST NN MODEL
-predict_test_scaled_NN = compute(NN, test_scaled_NN[,c(2:14)])
-predict_test_scaled_NN <- data.frame(actual = test_scaled_NN$crim, 
-                                prediction = predict_test_scaled_NN$net.result)
+Y_test_pred <- mlp %>% predict(X_test)
+Y_test_pred_l2 <- mlp_l2() %>% predict(X_test)
+Y_test_pred_l1 <- mlp_l1() %>% predict(X_test)
+Y_test_pred_l1_l2 <- mlp_l1_l2() %>% predict(X_test)
 
-------------------------------------------------------------------------
-## 7. MODEL ACCURACY
-# Revert scaled data back to originally formatted data  
-predict_test_NN=predict_test_scaled_NN$prediction * abs(diff(range(crim))) + min(crim)
-actual_test_NN=predict_test_scaled_NN$actual * abs(diff(range(crim))) + min(crim)
+#------------------------------------------------------------------------
+## 7. K-FOLD CROSS VALIDATION
 
-# Regression: RMSE and R^2 for the test set
-RMSE = ( sum((actual_test_NN-predict_test_NN)^2) / nrow(testNN) )^ 0.5
-R_squared = 1 - 
-  sum((actual_test_NN-predict_test_NN)^2)/sum((actual_test_NN - mean(actual_test_NN))^2)
-print('RMSE = ')  
-RMSE
-print('R squared = ')  
-R_squared
+## 8. MODEL ASSESSMENT: performance, accuracy, interpretability, efficiency.
 
-# Create the data arguments for glmnet
-x = model.matrix (crim ~., Boston) [,1]
-y = Boston$crim
-dim(x)
-dim(y)
-
-# Ridge regression regularisation
-#install.packages(glmnet)
-library (glmnet)
-grid =10^ seq (10 , -2 , length =100)
-ridge.mod = glmnet(x, y, alpha = 0, lambda = grid)
-dim(coef(ridge.mod))
 
