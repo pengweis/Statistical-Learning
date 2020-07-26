@@ -140,7 +140,7 @@ print_dot_callback <- callback_lambda(
     cat(".")
   }
 )  
-early_stop <- callback_early_stopping(monitor = "val_loss", patience = 800)
+early_stop <- callback_early_stopping(monitor = "val_loss", patience = 80)
 
 set.seed(1)
 visualisation <- mlp %>% fit(
