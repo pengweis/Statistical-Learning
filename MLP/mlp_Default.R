@@ -56,9 +56,8 @@ scaled_Y_train = normalizeData(Y_train, type = "0_1")
 scaled_Y_test = normalizeData(Y_test, type = "0_1")
 
 #------------------------------------------------------------------------
-## 5. TRAIN NN MODEL
+## 5. CONSTRUCT MODELS
 #------------------------------------------------------------------------
-# Construct the NN
 set.seed(1)
 mlp <- keras_model_sequential()  %>% 
   layer_dense(units = 16, input_shape = dim(X_train)[2], 
@@ -124,79 +123,90 @@ mlp_l1_l2 <- keras_model_sequential()  %>%
 set.seed(1)
 opt<-optimizer_adam( lr= 0.00001 , decay = 0, clipnorm = 1 )
 mlp %>% 
-  compile(loss = 'binary_crossentropy', optimizer = opt, metrics = c(precision=metric_precision, ))
+  compile(loss = 'binary_crossentropy', optimizer = opt, metrics = c("accuracy"))
 mlp_l2 %>% 
-  compile(loss = 'binary_crossentropy', optimizer = opt, metrics = c("accuracy", "Precision", "Recall"))
+  compile(loss = 'binary_crossentropy', optimizer = opt, metrics = c("accuracy"))
 mlp_l1 %>% 
-  compile(loss = 'binary_crossentropy', optimizer = opt, metrics = c("accuracy", "Precision", "Recall"))
+  compile(loss = 'binary_crossentropy', optimizer = opt, metrics = c("accuracy"))
 mlp_l1_l2 %>% 
-  compile(loss = 'binary_crossentropy', optimizer = opt, metrics = c("accuracy", "Precision", "Recall"))
+  compile(loss = 'binary_crossentropy', optimizer = opt, metrics = c("accuracy"))
 
 mlp %>% summary()
 mlp_l2 %>% summary()
 mlp_l1 %>% summary()
 mlp_l1_l2 %>% summary()
 
-#Train the NN
-set.seed(1)
-print_dot_callback <- callback_lambda(
-  on_epoch_end = function(epoch, logs) {
-    if (epoch %% 80 == 0) cat("\n")
-    cat(".")
-  }
-)  
-early_stop <- callback_early_stopping(monitor = "val_loss", patience = 20)
+# TRAIN/FIT HISTORIES
+# K-FOLD CROSS VALIDATION -------------------------------------------------
+k <- 5
+indices <- sample(1:nrow(scaled_X_train))
+folds <- cut(1:length(indices), breaks = k, labels = FALSE) 
 
-# set class weight for the imbalanced dataset
-total = nrow(dataset)
-neg = binCounts(dataset$default, bx =c(0, 1))
-pos = total - neg
+mse_histories_mlp <- NULL
+mse_histories_mlp_l2 <- NULL
+mse_histories_mlp_l1 <- NULL
+mse_histories_mlp_l1_l2 <- NULL
 
-set.seed(1)
-visualisation <- mlp %>% 
-  fit(X_train, 
-      Y_train, 
-      epochs = 100,
-      verbose = 0, 
-      validation_split = 0.2, 
-      shuffle = TRUE,   
-      class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)),
-      callbacks = list(early_stop, print_dot_callback))
-
-set.seed(1)
-visualisation_l2 <- mlp_l2 %>% 
-  fit(X_train, Y_train, epochs = 100,
-      verbose = 0, validation_split = 0.2, shuffle = TRUE,
-      class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)),
-      callbacks = list(early_stop, print_dot_callback))
-
-set.seed(1)
-visualisation_l1 <- mlp_l1 %>% 
-  fit(X_train, Y_train, epochs = 100,
-      verbose = 0, validation_split = 0.2, shuffle = TRUE,  
-      class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)),
-      callbacks = list(early_stop, print_dot_callback))
-
-set.seed(1)
-visualisation_l1_l2 <- mlp_l1_l2 %>% 
-  fit(X_train, Y_train, epochs = 100,
-      verbose = 0, validation_split = 0.2, shuffle = TRUE,
-      class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)),
-      callbacks = list(early_stop, print_dot_callback))
-
-# Visualisation
-plot(visualisation, smooth = FALSE, 
-     main = "Baseline MultiLayer Perceptron", 
-     xlab = "Number of Iterations")
-plot(visualisation_l2, smooth = FALSE, 
-     main = "L2 Regularised MultiLayer Perceptron", 
-     xlab = "Number of Iterations") 
-plot(visualisation_l1, smooth = FALSE, 
-     main = "L1 Regularised MultiLayer Perceptron", 
-     xlab = "Number of Iterations")
-plot(visualisation_l1_l2, smooth = FALSE, 
-     main = "L1 and L2 Regularised MultiLayer Perceptron", 
-     xlab = "Number of Iterations")
+for (i in 1:k) {
+  cat("processing fold #", i, "\n")
+  # TRAINING/VALIDATION DATA PARTITION ----------------------------------
+  
+  # Prepare the validation data: data from partition # k
+  indices_val <- which(folds == i, arr.ind = TRUE) 
+  scaled_X_val <- scaled_X_train[indices_val,]
+  scaled_Y_val <- scaled_Y_train[indices_val]
+  
+  # Prepare the training data: data from all other partitions
+  partial_scaled_X_train <- scaled_X_train[-indices_val,]
+  partial_scaled_Y_train <- scaled_Y_train[-indices_val]
+  
+  #Train the NN
+  set.seed(1)
+  
+  # set class weight for the imbalanced dataset
+  total = nrow(dataset)
+  neg = binCounts(dataset$default, bx =c(0, 1))
+  pos = total - neg
+  
+  set.seed(1)
+  history_mlp <- mlp %>% 
+    fit(partial_scaled_X_train,
+        partial_scaled_Y_train,
+        validation_data = list(scaled_X_val, scaled_Y_val),
+        epochs = 100,
+        verbose = 0, 
+        class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)))
+  plot(history_mlp, metrics = "accuracy", smooth = FALSE)
+  
+  set.seed(1)
+  history_mlp_l2 <- mlp_l2 %>% 
+    fit(partial_scaled_X_train,
+        partial_scaled_Y_train,
+        validation_data = list(scaled_X_val, scaled_Y_val),
+        epochs = 100,
+        verbose = 0, 
+        class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)))
+  plot(history_mlp_l2, metrics = "accuracy", smooth = FALSE) 
+  
+  set.seed(1)
+  history_mlp_l1 <- mlp_l1 %>% 
+    fit(partial_scaled_X_train,
+        partial_scaled_Y_train,
+        validation_data = list(scaled_X_val, scaled_Y_val),
+        epochs = 100,
+        verbose = 0,   
+        class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)))
+  plot(history_mlp_l1, metrics = "mean_squared_error", smooth = FALSE) 
+  
+  set.seed(1)
+  history_mlp_l1_l2 <- mlp_l1_l2 %>% 
+    fit(partial_scaled_X_train,
+        partial_scaled_Y_train,
+        validation_data = list(scaled_X_val, scaled_Y_val),
+        epochs = 100,
+        verbose = 0, 
+        class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)))
+}
 
 #Evaluate the model
 set.seed(1)
@@ -234,10 +244,3 @@ mean(Y_test == pred_mlp_l1_l2)
 df <- data.frame("Actual" = Y_test, "Baseline" = pred_mlp, "L2" = pred_mlp_l2, "L1" = pred_mlp_l1, "L1 and L2" = pred_mlp_l1_l2)
 head(df[1:5], 10)
 summary(df)
-
-#------------------------------------------------------------------------
-## 7. MODEL ASSESSMENT: performance, accuracy, interpretability, efficiency.
-#------------------------------------------------------------------------
-
-
-
