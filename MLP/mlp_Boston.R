@@ -146,18 +146,6 @@ for (i in 1:k) {
   
   # TRAIN/FIT MODELS  ----------------------------------------------------------
   
-  # Create call backs
-  set.seed(1)
-  print_dot_callback <- callback_lambda(
-    on_epoch_end = function(epoch, logs) {
-      if (epoch %% 80 == 0) cat("\n")
-      cat(".")
-    }
-  )  
-  
-  # Create early stopping
-  early_stop <- callback_early_stopping(monitor = "val_loss", patience = 50)
-  
   # Fit models MLP 
   set.seed(1)
   history_mlp <- mlp %>% fit(
@@ -166,8 +154,8 @@ for (i in 1:k) {
     validation_data = list(scaled_X_val, scaled_Y_val),
     epochs = 100,
     verbose = 0, 
-    batch_size = 1,
-    callbacks = list(early_stop, print_dot_callback))
+    batch_size = 1)
+  plot(history_mlp, metrics = "mean_squared_error", smooth = FALSE)
   
   # Fit models MLP, using L2 regularisation 
   set.seed(1)
@@ -177,8 +165,8 @@ for (i in 1:k) {
     validation_data = list(scaled_X_val, scaled_Y_val),
     epochs = 100,
     verbose = 0, 
-    batch_size = 1,
-    callbacks = list(early_stop, print_dot_callback))
+    batch_size = 1)
+  plot(history_mlp_l2, metrics = "mean_squared_error", smooth = FALSE) 
   
   # Fit models MLP, using L1 regularisation 
   set.seed(1)
@@ -188,8 +176,8 @@ for (i in 1:k) {
     validation_data = list(scaled_X_val, scaled_Y_val),
     epochs = 100,
     verbose = 0, 
-    batch_size = 1,
-    callbacks = list(early_stop, print_dot_callback))
+    batch_size = 1)
+  plot(history_mlp_l1, metrics = "mean_squared_error", smooth = FALSE) 
   
   # Fit models MLP, using L1 and L2 regularisation 
   set.seed(1)
@@ -199,9 +187,9 @@ for (i in 1:k) {
     validation_data = list(scaled_X_val, scaled_Y_val),
     epochs = 100,
     verbose = 0, 
-    batch_size = 1,
-    callbacks = list(early_stop, print_dot_callback))
-
+    batch_size = 1)
+  plot(history_mlp_l1_l2, metrics = "mean_squared_error", smooth = FALSE)
+   
   # LOAD TRAIN/FIT HISTORIES -----------------------------------------------------
   
   add_mse_history_mlp <- mlp %>%  evaluate(scaled_X_val, scaled_Y_val, verbose = 0)
@@ -224,10 +212,10 @@ for (i in 1:k) {
 # MODELS COMPARISION -----------------------------------------------------------
 # Compute the average train/val MSE for all folds of 4 models
 
-val_mlp = mean(mse_histories_mlp)
-val_mlp_l2 = mean(mse_histories_mlp_l2)
-val_mlp_l1 = mean(mse_histories_mlp_l1)
-val_mlp_l1_l2 = mean(mse_histories_mlp_l1_l2)
+paste0("Average normalised MSE of MLP on validation set: $", sprintf("%.2f", mean(mse_histories_mlp)))
+paste0("Average normalised MSE of MLP (L2 regularisation) on validation set: $", sprintf("%.2f", mean(mse_histories_mlp_l2)))
+paste0("Average normalised MSE of MLP (L1 regularisation) on validation set: $", sprintf("%.2f", mean(mse_histories_mlp_l1)))
+paste0("Average normalised MSE of MLP (L1 and L2 regularisation) on validation set: $", sprintf("%.2f", mean(mse_histories_mlp_l1_l2)))
 
 # TEST THE BEST MODEL -------------------------------------------------------------
 # Predict the normalised y
