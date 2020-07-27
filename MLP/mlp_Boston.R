@@ -10,7 +10,6 @@ library(tensorflow) # build ANN model
 library(keras) # build ANN model
 library(RSNNS) # Data normalisation
 library(ggplot2)
-
 # LOAD DATA ---------------------------------------------------------------
 library(MASS)
 attach(Boston)
@@ -58,12 +57,12 @@ mlp_l2 <- keras_model_sequential() %>%
   layer_dense(units = 8, input_shape = dim(X_train)[2], 
               kernel_initializer = "orthogonal",
               bias_initializer = initializer_constant(0),
-              kernel_regularizer = regularizer_l2(l = 0.003)) %>%
+              kernel_regularizer = regularizer_l2(l = 0.001)) %>%
   #layer_dropout(rate = 0.5) %>% 
   layer_dense(units = 4, activation = "relu", 
               kernel_initializer = "orthogonal",
               bias_initializer = initializer_constant(0),
-              kernel_regularizer = regularizer_l2(l = 0.003)) %>%
+              kernel_regularizer = regularizer_l2(l = 0.001)) %>%
   #layer_dropout(rate = 0.5) %>% 
   layer_dense(units = 1, activation = "linear",
               kernel_initializer = "orthogonal",
@@ -74,12 +73,12 @@ mlp_l1 <- keras_model_sequential() %>%
   layer_dense(units = 8, input_shape = dim(X_train)[2], 
               kernel_initializer = "orthogonal",
               bias_initializer = initializer_constant(0),
-              kernel_regularizer = regularizer_l1(l = 0.003)) %>%
+              kernel_regularizer = regularizer_l1(l = 0.001)) %>%
   #layer_dropout(rate = 0.5) %>% 
   layer_dense(units = 4, activation = "relu", 
               kernel_initializer = "orthogonal",
               bias_initializer = initializer_constant(0),
-              kernel_regularizer = regularizer_l1(l = 0.003)) %>%
+              kernel_regularizer = regularizer_l1(l = 0.001)) %>%
   #layer_dropout(rate = 0.5) %>% 
   layer_dense(units = 1, activation = "linear", 
               kernel_initializer = "orthogonal",
@@ -90,19 +89,19 @@ mlp_l1_l2 <- keras_model_sequential() %>%
   layer_dense(units = 8, input_shape = dim(X_train)[2], 
               kernel_initializer = "orthogonal",
               bias_initializer = initializer_constant(0),
-              kernel_regularizer = regularizer_l1_l2(l1 = 0.003, l2 = 0.003)) %>%
+              kernel_regularizer = regularizer_l1_l2(l1 = 0.001, l2 = 0.001)) %>%
   #layer_dropout(rate = 0.5) %>% 
   layer_dense(units = 4, activation = "relu", 
               kernel_initializer = "orthogonal",
               bias_initializer = initializer_constant(0),
-              kernel_regularizer = regularizer_l1_l2(l1 = 0.003, l2 = 0.003)) %>%
+              kernel_regularizer = regularizer_l1_l2(l1 = 0.001, l2 = 0.001)) %>%
   #layer_dropout(rate = 0.5) %>% 
   layer_dense(units = 1, activation = "linear", 
               kernel_initializer = "orthogonal",
               bias_initializer = initializer_constant(0))
 
 set.seed(1)
-opt<-optimizer_adam( lr= 0.003 , decay = 0, clipnorm = 1 )
+opt<-optimizer_adam( lr= 0.00001 , decay = 0, clipnorm = 1 )
 
 mlp %>% compile(
   loss = "mse", optimizer = opt, metrics = list("mean_squared_error"))
@@ -127,14 +126,10 @@ k <- 5
 indices <- sample(1:nrow(scaled_X_train))
 folds <- cut(1:length(indices), breaks = k, labels = FALSE) 
 
-train_mse_histories_mlp <- NULL
-val_mse_histories_mlp <- NULL
-train_mse_histories_mlp_l2 <- NULL
-val_mse_histories_mlp_l2 <- NULL
-train_mse_histories_mlp_l1 <- NULL
-val_mse_histories_mlp_l1 <- NULL
-train_mse_histories_mlp_l1_l2 <- NULL
-val_mse_histories_mlp_l1_l2 <- NULL
+mse_histories_mlp <- NULL
+mse_histories_mlp_l2 <- NULL
+mse_histories_mlp_l1 <- NULL
+mse_histories_mlp_l1_l2 <- NULL
 
 for (i in 1:k) {
   cat("processing fold #", i, "\n")
@@ -209,68 +204,30 @@ for (i in 1:k) {
 
   # LOAD TRAIN/FIT HISTORIES -----------------------------------------------------
   
-  add_train_mse_history_mlp <- history_mlp$loss
-  train_mse_histories_mlp <- rbind(train_mse_histories_mlp, 
-                                   add_train_mse_history_mlp)
-  add_val_mse_histories_mlp <- history_mlp$val_loss
-  val_mse_histories_mlp <- rbind(val_mse_histories_mlp, 
-                                 add_val_mse_histories_mlp)
+  add_mse_history_mlp <- mlp %>%  evaluate(scaled_X_val, scaled_Y_val, verbose = 0)
+  mse_histories_mlp <- c(mse_histories_mlp, 
+                         add_mse_history_mlp["loss"])
   
-  add_train_mse_histories_mlp_l2 <- history_mlp_l2$loss
-  train_mse_histories_mlp_l2 <- rbind(train_mse_histories_mlp_l2, 
-                                      add_train_mse_histories_mlp_l2)
-  add_val_mse_histories_mlp_l2 <- history_mlp_l2$val_loss
-  val_mse_histories_mlp_l2 <- rbind(val_mse_histories_mlp_l2, 
-                                    add_val_mse_histories_mlp_l2)
+  add_mse_history_mlp_l2 <- mlp_l2 %>%  evaluate(scaled_X_val, scaled_Y_val, verbose = 0)
+  mse_histories_mlp_l2 <- c(mse_histories_mlp_l2, 
+                            add_mse_history_mlp_l2["loss"])
   
-  add_train_mse_histories_mlp_l1 <- history_mlp_l1$loss
-  train_mse_histories_mlp_l1 <- rbind(train_mse_histories_mlp_l1, 
-                                      add_train_mse_histories_mlp_l1)
-  add_val_mse_histories_mlp_l1 <- history_mlp_l1$val_loss
-  val_mse_histories_mlp_l1 <- rbind(val_mse_histories_mlp_l1, 
-                                    add_val_mse_histories_mlp_l1)
+  add_mse_history_mlp_l1 <- mlp_l1 %>%  evaluate(scaled_X_val, scaled_Y_val, verbose = 0)
+  mse_histories_mlp_l1 <- c(mse_histories_mlp_l1, 
+                            add_mse_history_mlp_l1["loss"])
   
-  add_train_mse_histories_mlp_l1_l2 <- history_mlp_l1_l2$loss
-  train_mse_histories_mlp_l1_l2 <- rbind(train_mse_histories_mlp_l1_l2, 
-                                         add_train_mse_histories_mlp_l1_l2)
-  add_val_mse_histories_mlp_l1_l2 <- history_mlp_l1_l2$val_loss
-  val_mse_histories_mlp_l1_l2 <- rbind(val_mse_histories_mlp_l1_l2, 
-                                       add_val_mse_histories_mlp_l1_l2)
+  add_mse_history_mlp_l1_l2 <- mlp_l1 %>%  evaluate(scaled_X_val, scaled_Y_val, verbose = 0)
+  mse_histories_mlp_l1_l2 <- c(mse_histories_mlp_l1_l2, 
+                               add_mse_history_mlp_l1_l2["loss"])
   
 }
 # MODELS COMPARISION -----------------------------------------------------------
 # Compute the average train/val MSE for all folds of 4 models
-d1 <- data.frame(
-  train_loss = apply(train_mse_histories_mlp, 2, mean), 
-  valid_loss = apply(val_mse_histories_mlp, 2, mean))
-plt1 <- plot_Keras_fit_trajectory(
-  d1,
-  title = "MLP performance by epoch")
-suppressWarnings(print(plt1)) # too few points for loess
 
-d2 <- data.frame(
-  train_loss = apply(train_mse_histories_mlp_l2, 2, mean), 
-  valid_loss = apply(val_mse_histories_mlp_l2, 2, mean))
-plt2 <- plot_Keras_fit_trajectory(
-  d2,
-  title = "MLP (L2 regularisation) performance by epoch")
-suppressWarnings(print(plt2)) # too few points for loess
-
-d3 <- data.frame(
-  train_loss = apply(train_mse_histories_mlp_l1, 2, mean), 
-  valid_loss = apply(val_mse_histories_mlp_l1, 2, mean))
-plt3 <- plot_Keras_fit_trajectory(
-  d3,
-  title = "MLP (L1 regularisation) performance by epoch")
-suppressWarnings(print(plt3)) # too few points for loess
-
-d4 <- data.frame(
-  train_loss = apply(train_mse_histories_mlp_l1_l2, 2, mean), 
-  valid_loss = apply(val_mse_histories_mlp_l1_l2, 2, mean))
-plt4 <- plot_Keras_fit_trajectory(
-  d4,
-  title = "MLP (L1 and L2 regularisation) performance by epoch")
-suppressWarnings(print(plt4)) # too few points for loess
+val_mlp = mean(mse_histories_mlp)
+val_mlp_l2 = mean(mse_histories_mlp_l2)
+val_mlp_l1 = mean(mse_histories_mlp_l1)
+val_mlp_l1_l2 = mean(mse_histories_mlp_l1_l2)
 
 # TEST THE BEST MODEL -------------------------------------------------------------
 # Predict the normalised y
