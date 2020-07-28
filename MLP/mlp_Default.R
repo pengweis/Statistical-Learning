@@ -162,12 +162,20 @@ for (i in 1:k) {
   
   #Train the NN
   set.seed(1)
+  print_dot_callback <- callback_lambda(
+    on_epoch_end = function(epoch, logs) {
+      if (epoch %% 80 == 0) cat("\n")
+      cat(".")
+    }
+  )  
   
   # set class weight for the imbalanced dataset
+  set.seed(1)
   total = nrow(dataset)
   neg = binCounts(dataset$default, bx =c(0, 1))
   pos = total - neg
   
+  #Evaluate the models
   set.seed(1)
   history_mlp <- mlp %>% 
     fit(partial_scaled_X_train,
@@ -175,7 +183,8 @@ for (i in 1:k) {
         validation_data = list(scaled_X_val, scaled_Y_val),
         epochs = 100,
         verbose = 0, 
-        class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)))
+        class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)), 
+        callbacks = list(print_dot_callback))
   plot(history_mlp, metrics = "accuracy", smooth = FALSE)
   
   set.seed(1)
@@ -185,7 +194,8 @@ for (i in 1:k) {
         validation_data = list(scaled_X_val, scaled_Y_val),
         epochs = 100,
         verbose = 0, 
-        class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)))
+        class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)), 
+        callbacks = list(print_dot_callback))
   plot(history_mlp_l2, metrics = "accuracy", smooth = FALSE) 
   
   set.seed(1)
@@ -195,8 +205,9 @@ for (i in 1:k) {
         validation_data = list(scaled_X_val, scaled_Y_val),
         epochs = 100,
         verbose = 0,   
-        class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)))
-  plot(history_mlp_l1, metrics = "mean_squared_error", smooth = FALSE) 
+        class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)), 
+        callbacks = list(print_dot_callback))
+  plot(history_mlp_l1, metrics = "accuracy", smooth = FALSE) 
   
   set.seed(1)
   history_mlp_l1_l2 <- mlp_l1_l2 %>% 
@@ -205,39 +216,32 @@ for (i in 1:k) {
         validation_data = list(scaled_X_val, scaled_Y_val),
         epochs = 100,
         verbose = 0, 
-        class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)))
+        class_weight = list("0"=total/(2*neg),"1"=total/(2*pos)), 
+        callbacks = list(print_dot_callback))
+  plot(history_mlp_l1_l2, metrics = "accuracy", smooth = FALSE) 
+  
 }
-
-#Evaluate the model
-set.seed(1)
-mlp %>% evaluate(X_test, Y_test)
-set.seed(1)
-mlp_l2 %>% evaluate(X_test, Y_test)
-set.seed(1)
-mlp_l1 %>% evaluate(X_test, Y_test)
-set.seed(1)
-mlp_l1_l2 %>% evaluate(X_test, Y_test)
 
 #------------------------------------------------------------------------
 ## 6. TEST NN MODEL
 #------------------------------------------------------------------------
 set.seed(1)
-pred_mlp <- predict_classes(mlp, X_test)
+pred_mlp <- predict_classes(mlp, scaled_X_test)
 table(Y_test, pred_mlp)
 mean(Y_test == pred_mlp)
 
 set.seed(1)
-pred_mlp_l2 <- predict_classes(mlp_l2, X_test)
+pred_mlp_l2 <- predict_classes(mlp_l2, scaled_X_test)
 table(Y_test, pred_mlp_l2)
 mean(Y_test == pred_mlp_l2)
 
 set.seed(1)
-pred_mlp_l1 <- predict_classes(mlp_l1, X_test)
+pred_mlp_l1 <- predict_classes(mlp_l1, scaled_X_test)
 table(Y_test, pred_mlp_l1)
 mean(Y_test == pred_mlp_l1)
 
 set.seed(1)
-pred_mlp_l1_l2 <- predict_classes(mlp_l1_l2, X_test)
+pred_mlp_l1_l2 <- predict_classes(mlp_l1_l2, scaled_X_test)
 table(Y_test, pred_mlp_l1_l2)
 mean(Y_test == pred_mlp_l1_l2)
 
